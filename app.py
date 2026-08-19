@@ -1,114 +1,85 @@
-import os
-import io
-import PyPDF2
 import streamlit as st
 import google.generativeai as genai
+import PyPDF2 as pdf
+import os
 
-# Page Configuration
-st.set_page_config(
-    page_title="AI Resume Analyzer & ATS Checker",
-    page_icon="📄",
-    layout="wide"
-)
-
-# Title & Subtitle
-st.title("📄 AI Resume Analyzer & ATS Checker")
-st.write("Evaluate your resume against job descriptions using Google Gemini AI!")
+st.set_page_config(page_title="AI Resume Analyzer", layout="wide")
 
 # Sidebar for API Key
-st.sidebar.header("Configuration")
-api_key = st.sidebar.text_input("Enter Google Gemini API Key:", type="password")
+st.sidebar.title("Configuration")
+api_key_input = st.sidebar.text_input("Enter Google Gemini API Key:", type="password")
+
+# Setup Gemini API
+api_key = api_key_input or os.getenv("GEMINI_API_KEY")
 
 if api_key:
     genai.configure(api_key=api_key)
 
-# Function to extract text from uploaded PDF
-def extract_pdf_text(uploaded_file):
-    pdf_reader = PyPDF2.PdfReader(io.BytesIO(uploaded_file.read()))
+def get_gemini_response(prompt):
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    response = model.generate_content(prompt)
+    return response.text
+
+def input_pdf_text(uploaded_file):
+    reader = pdf.PdfReader(uploaded_file)
     text = ""
-    for page in pdf_reader.pages:
-        page_text = page.extract_text()
+    for page in range(len(reader.pages)):
+        page_text = reader.pages[page].extract_text()
         if page_text:
-            text += page_text + "\n"
+            text += page_text
     return text
 
-# Input fields
+st.title("📄 AI Resume Analyzer & ATS Checker")
+st.caption("Evaluate your resume against job descriptions using Google Gemini AI!")
+
 col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("1. Upload Resume")
-    uploaded_resume = st.file_uploader("Choose your Resume (PDF format)", type=["pdf"])
+    uploaded_file = st.file_uploader("Choose your Resume (PDF format)", type=["pdf"])
 
 with col2:
     st.subheader("2. Job Description")
     job_description = st.text_area("Paste the Job Description here...", height=200)
 
-# Action Buttons
-st.divider()
 col_btn1, col_btn2 = st.columns(2)
 
 with col_btn1:
-    analyze_btn = st.button("📊 Detailed Resume Feedback", use_container_width=True)
+    btn_feedback = st.button("📊 Detailed Resume Feedback")
 
 with col_btn2:
-    ats_btn = st.button("🎯 Calculate ATS Match Score", use_container_width=True)
+    btn_ats = st.button("🎯 Calculate ATS Match Score")
 
-# Processing Logic
-if uploaded_resume and job_description:
-    resume_text = extract_pdf_text(uploaded_resume)
-
-    if analyze_btn:
-        if not api_key:
-            st.error("Please enter your Gemini API Key in the sidebar first!")
-        else:
-            with st.spinner("Analyzing resume against job description..."):
+if btn_feedback or btn_ats:
+    if not api_key:
+        st.error("Please enter a valid Gemini API Key in the sidebar or Secrets!")
+    elif uploaded_file is None or not job_description.strip():
+        st.warning("Please upload a resume AND paste a job description first!")
+    else:
+        with st.spinner("Analyzing... Please wait..."):
+            resume_text = input_pdf_text(uploaded_file)
+            
+            if btn_feedback:
                 prompt = f"""
-                You are an expert HR Manager and Technical Recruiter. Analyze the following resume against the job description.
+                You are an experienced HR/Recruiter. Analyze the given Resume against the Job Description.
+                Provide feedback on Strengths, Weaknesses, and Suggestions for improvement.
                 
-                Resume Text:
-                {resume_text}
-
-                Job Description:
-                {job_description}
-
-                Please provide a detailed review with the following sections:
-                1. Executive Summary
-                2. Key Strengths & Matching Skills
-                3. Missing Skills & Keywords
-                4. Actionable Suggestions for Improvement
+                Resume: {resume_text}
+                Job Description: {job_description}
                 """
-                
-                model = genai.GenerativeModel("gemini-1.5-flash")
-                response = model.generate_content(prompt)
-                
-                st.subheader("📌 Resume Analysis Feedback")
-                st.write(response.text)
-
-    if ats_btn:
-        if not api_key:
-            st.error("Please enter your Gemini API Key in the sidebar first!")
-        else:
-            with st.spinner("Calculating ATS score..."):
+            else:
                 prompt = f"""
-                You are an advanced Applicant Tracking System (ATS). Evaluate the resume against the provided job description.
-
-                Resume Text:
-                {resume_text}
-
-                Job Description:
-                {job_description}
-
-                Provide the output in the following format:
-                1. ATS Match Percentage (e.g., 75%)
-                2. Missing Keywords (List important missing keywords)
-                3. Final Verdict (Fit / Needs Improvement / Not Recommended)
+                You are an advanced ATS (Applicant Tracking System) scanner. 
+                Evaluate the match between the Resume and Job Description.
+                Give an ATS Match Percentage (0-100%), Missing Keywords, and a Final Summary.
+                
+                Resume: {resume_text}
+                Job Description: {job_description}
                 """
-                
-                model = genai.GenerativeModel("gemini-1.5-flash")
-                response = model.generate_content(prompt)
-                
-                st.subheader("🎯 ATS Compatibility Results")
-                st.write(response.text)
-
-elif (analyze_btn or ats_btn) and not (uploaded_resume and job_description):
-    st.warning("Please upload a resume and paste a job description first!")
+            
+            try:
+                response = get_gemini_response(prompt)
+                st.success("Analysis Complete!")
+                st.markdown(response)
+            except Exception as e:
+                st.error(f"Error generating response: {e}")
