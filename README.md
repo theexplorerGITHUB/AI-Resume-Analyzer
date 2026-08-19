@@ -1,4 +1,4 @@
-# 🚀 GenAI AI Resume Analyzer & ATS Checker
+# 🚀 GenAI-Powered Resume Analyzer & ATS Checker
 
 An automated ATS screening platform built using **Python**, **Streamlit**, and **Google Gemini API** to evaluate resumes against Job Descriptions using semantic AI analysis.
 
@@ -19,4 +19,4 @@ An automated ATS screening platform built using **Python**, **Streamlit**, and *
 * **Frontend:** Streamlit
 * **AI Model:** Google Gemini API
 * **PDF Parser:** PyPDF2
-*
+
